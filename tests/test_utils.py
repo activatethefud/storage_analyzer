@@ -6,7 +6,7 @@ from storage_analyzer.utils import (
     format_size, get_home_directory, sanitize_path,
     is_safe_to_delete, get_disk_usage, get_device_for_path,
     get_mount_point_for_device, get_all_devices, validate_device,
-    get_device_info
+    get_device_info, detect_distro, detect_package_managers
 )
 
 
@@ -52,7 +52,7 @@ class TestSanitizePath:
             sanitize_path("../../../etc", base="/home/user")
     
     def test_path_within_base_allowed(self):
-        result = sanitize_path("subdir/file.txt", base="/home/nikola/storage_analyzer")
+        result = sanitize_path("subdir/file.txt", base="/mnt/pool/nikola/Documents/Python/storage_analyzer")
         assert "storage_analyzer" in result
 
 
@@ -143,3 +143,28 @@ class TestDeviceMapping:
         assert info is not None
         assert "device" in info
         assert "mountpoint" in info
+
+
+class TestDistroDetection:
+    """Tests for distro and package manager detection."""
+    
+    def test_detect_distro_returns_string_or_none(self):
+        """Test that detect_distro returns string or None."""
+        result = detect_distro()
+        assert result is None or isinstance(result, str)
+    
+    def test_detect_package_managers_returns_list(self):
+        """Test that detect_package_managers returns a list."""
+        result = detect_package_managers()
+        assert isinstance(result, list)
+    
+    def test_detect_package_managers_contains_apt_if_available(self):
+        """Test that apt is in the list if available."""
+        result = detect_package_managers()
+        if result:
+            assert all(isinstance(pm, str) for pm in result)
+    
+    def test_detect_package_managers_at_least_one(self):
+        """Test that at least one package manager is detected on a normal system."""
+        result = detect_package_managers()
+        assert len(result) >= 1

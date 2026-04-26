@@ -200,3 +200,84 @@ class TestPackageCleanupSuggestions:
         mock_run.side_effect = side_effect
         items = get_package_cleanup_suggestions()
         assert isinstance(items, list)
+
+
+class TestMultiPackageManager:
+    """Tests for multi-package manager detection."""
+    
+    @patch('storage_analyzer.suggestions.detect_package_managers')
+    @patch('subprocess.run')
+    def test_apt_commands_when_detected(self, mock_run, mock_detect):
+        """Test APT commands are generated when apt is detected."""
+        mock_detect.return_value = ['apt']
+        
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = ""
+        mock_run.return_value = mock_result
+        
+        from storage_analyzer.suggestions import get_package_cleanup_suggestions
+        items = get_package_cleanup_suggestions()
+        
+        names = [item.name for item in items]
+        assert any("APT" in n for n in names)
+    
+    @patch('storage_analyzer.suggestions.detect_package_managers')
+    @patch('subprocess.run')
+    def test_dnf_commands_when_detected(self, mock_run, mock_detect):
+        """Test DNF commands are generated when dnf is detected."""
+        mock_detect.return_value = ['dnf']
+        
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = ""
+        mock_run.return_value = mock_result
+        
+        from storage_analyzer.suggestions import get_package_cleanup_suggestions
+        items = get_package_cleanup_suggestions()
+        
+        names = [item.name for item in items]
+        assert any("DNF" in n for n in names)
+    
+    @patch('storage_analyzer.suggestions.detect_package_managers')
+    @patch('subprocess.run')
+    def test_multiple_pms_all_generated(self, mock_run, mock_detect):
+        """Test commands for multiple package managers."""
+        mock_detect.return_value = ['apt', 'flatpak', 'snap']
+        
+        def side_effect(*args, **kwargs):
+            cmd = args[0]
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            
+            if 'snap' in cmd:
+                mock_result.stdout = "snap1\nsnap2\nsnap3\n"
+            elif 'flatpak' in cmd:
+                mock_result.stdout = "flatpak-app\n"
+            else:
+                mock_result.stdout = ""
+            
+            return mock_result
+        
+        mock_run.side_effect = side_effect
+        
+        from storage_analyzer.suggestions import get_package_cleanup_suggestions
+        items = get_package_cleanup_suggestions()
+        
+        names = [item.name for item in items]
+        assert any("APT" in n for n in names)
+        assert any("Flatpak" in n for n in names)
+        assert any("Snap" in n for n in names)
+    
+    def test_package_manager_commands_map(self):
+        """Test PACKAGE_MANAGER_COMMANDS contains all expected managers."""
+        from storage_analyzer.suggestions import PACKAGE_MANAGER_COMMANDS
+        
+        assert 'apt' in PACKAGE_MANAGER_COMMANDS
+        assert 'dnf' in PACKAGE_MANAGER_COMMANDS
+        assert 'pacman' in PACKAGE_MANAGER_COMMANDS
+        assert 'zypper' in PACKAGE_MANAGER_COMMANDS
+        assert 'apk' in PACKAGE_MANAGER_COMMANDS
+        
+        assert 'clean' in PACKAGE_MANAGER_COMMANDS['apt']
+        assert 'autoremove' in PACKAGE_MANAGER_COMMANDS['apt']

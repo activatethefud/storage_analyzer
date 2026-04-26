@@ -5,7 +5,36 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from storage_analyzer.utils import format_size, get_home_directory, get_device_for_path
+from storage_analyzer.utils import format_size, get_home_directory, get_device_for_path, detect_package_managers
+
+
+PACKAGE_MANAGER_COMMANDS = {
+    'apt': {
+        'clean': 'apt-get clean',
+        'autoremove': 'apt-get autoremove',
+        'old_kernels': 'apt-get autoremove --purge',
+    },
+    'dnf': {
+        'clean': 'dnf clean all',
+        'autoremove': 'dnf autoremove',
+        'old_kernels': 'dnf remove oldest-kernel',
+    },
+    'pacman': {
+        'clean': 'pacman -Scc',
+        'autoremove': 'pacman -Rsn $(pacman -Qtdq)',
+        'old_kernels': 'pacman -Rsn $(pacman -Qqtd)',
+    },
+    'zypper': {
+        'clean': 'zypper clean',
+        'autoremove': 'zypper rm -u',
+        'old_kernels': 'zypper rm -u kernel-default-base',
+    },
+    'apk': {
+        'clean': 'apk clean',
+        'autoremove': 'apk del -r $(apk info -e)',
+        'old_kernels': 'apk del linux-lts',
+    },
+}
 
 
 @dataclass
@@ -183,6 +212,7 @@ def get_system_cleanup_suggestions() -> list[CleanableItem]:
     Includes journal cleanup, old kernels, crash reports, etc.
     """
     items = []
+    detected_pms = detect_package_managers()
     
     journal_dir = Path("/var/log/journal")
     if journal_dir.exists() and os.access(journal_dir, os.R_OK):
@@ -199,25 +229,110 @@ def get_system_cleanup_suggestions() -> list[CleanableItem]:
         except (PermissionError, OSError):
             pass
     
-    try:
-        result = subprocess.run(
-            ["dpkg", "-l", "linux-image-*"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        if result.returncode == 0:
-            lines = [l for l in result.stdout.split("\n") if l.startswith("ii") and "linux-image" in l]
-            if len(lines) > 1:
-                items.append(CleanableItem(
-                    name="Old kernel images",
-                    path="/boot",
-                    size=0,
-                    command="sudo apt-get autoremove --purge",
-                    description=f"Remove {len(lines)-1} old kernel versions"
-                ))
-    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-        pass
+    if 'apt' in detected_pms:
+        try:
+            result = subprocess.run(
+                ["dpkg", "-l", "linux-image-*"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                lines = [l for l in result.stdout.split("\n") if l.startswith("ii") and "linux-image" in l]
+                if len(lines) > 1:
+                    items.append(CleanableItem(
+                        name="Old kernel images (APT)",
+                        path="/boot",
+                        size=0,
+                        command="sudo apt-get autoremove --purge",
+                        description=f"Remove {len(lines)-1} old kernel versions"
+                    ))
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
+    
+    if 'dnf' in detected_pms:
+        try:
+            result = subprocess.run(
+                ["dnf", "list", "installed", "kernel"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                lines = [l for l in result.stdout.split("\n") if l.startswith("kernel")]
+                if len(lines) > 1:
+                    items.append(CleanableItem(
+                        name="Old kernel images (DNF)",
+                        path="/boot",
+                        size=0,
+                        command="sudo dnf remove oldest-kernel",
+                        description=f"Remove {len(lines)-1} old kernel versions"
+                    ))
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
+    
+    if 'pacman' in detected_pms:
+        try:
+            result = subprocess.run(
+                ["pacman", "-Q"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                kernels = [l for l in result.stdout.split("\n") if l.startswith("linux")]
+                if len(kernels) > 1:
+                    items.append(CleanableItem(
+                        name="Old kernel images (Pacman)",
+                        path="/boot",
+                        size=0,
+                        command="sudo pacman -Rsn $(pacman -Qqtd)",
+                        description=f"Remove old kernel versions"
+                    ))
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
+    
+    if 'zypper' in detected_pms:
+        try:
+            result = subprocess.run(
+                ["zypper", "packages", "--installed-only", "--sort-by-name"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                lines = [l for l in result.stdout.split("\n") if "kernel-default" in l]
+                if len(lines) > 1:
+                    items.append(CleanableItem(
+                        name="Old kernel images (Zypper)",
+                        path="/boot",
+                        size=0,
+                        command="sudo zypper rm -u kernel-default",
+                        description=f"Remove old kernel versions"
+                    ))
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
+    
+    if 'apk' in detected_pms:
+        try:
+            result = subprocess.run(
+                ["apk", "info"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                kernels = [l for l in result.stdout.split("\n") if l.startswith("linux")]
+                if len(kernels) > 1:
+                    items.append(CleanableItem(
+                        name="Old kernel images (APK)",
+                        path="/boot",
+                        size=0,
+                        command="apk del linux-lts",
+                        description=f"Remove old kernel versions"
+                    ))
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
     
     crash_dir = Path("/var/crash")
     if crash_dir.exists() and os.access(crash_dir, os.R_OK):
@@ -292,113 +407,260 @@ def get_package_cleanup_suggestions() -> list[CleanableItem]:
     """
     Find cleanup suggestions from package managers.
     
-    Returns suggestions for apt, flatpak, snap, etc.
+    Detects all available package managers and provides appropriate cleanup commands.
     """
     items = []
     
-    apt_cache = Path("/var/cache/apt")
-    if apt_cache.exists() and os.access(apt_cache, os.R_OK):
+    detected_pms = detect_package_managers()
+    
+    if 'apt' in detected_pms:
+        apt_cache = Path("/var/cache/apt")
+        if apt_cache.exists() and os.access(apt_cache, os.R_OK):
+            try:
+                size = get_directory_size(str(apt_cache))
+                if size > 10 * 1024 * 1024:
+                    items.append(CleanableItem(
+                        name="APT package cache",
+                        path="/var/cache/apt",
+                        size=size,
+                        command="sudo apt-get clean",
+                        description="Clean APT download cache"
+                    ))
+            except (PermissionError, OSError):
+                pass
+        
         try:
-            size = get_directory_size(str(apt_cache))
-            if size > 10 * 1024 * 1024:
-                items.append(CleanableItem(
-                    name="APT package cache",
-                    path="/var/cache/apt",
-                    size=size,
-                    command="sudo apt-get clean",
-                    description="Clean APT download cache"
-                ))
-        except (PermissionError, OSError):
+            result = subprocess.run(
+                ["dpkg", "-l"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                try:
+                    autoremove_result = subprocess.run(
+                        ["apt-get", "autoremove", "--dry-run"],
+                        capture_output=True,
+                        text=True,
+                        timeout=30
+                    )
+                    if autoremove_result.returncode == 0:
+                        lines = autoremove_result.stdout.split("\n")
+                        packages = [l for l in lines if l.strip().startswith("Remv ")]
+                        if packages:
+                            items.append(CleanableItem(
+                                name="APT autoremove candidates",
+                                path="/var/lib/dpkg",
+                                size=0,
+                                command="sudo apt-get autoremove",
+                                description=f"{len(packages)} packages can be removed (dry-run shown)"
+                            ))
+                except (subprocess.TimeoutExpired, OSError):
+                    pass
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
+        
+        try:
+            result = subprocess.run(
+                ["deborphan"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                orphans = result.stdout.strip().split("\n")
+                if orphans and orphans[0]:
+                    items.append(CleanableItem(
+                        name="Deborphan orphaned libraries",
+                        path="/var/lib/dpkg",
+                        size=0,
+                        command="sudo deborphan | xargs apt-get remove --purge -y",
+                        description=f"{len(orphans)} orphaned libraries found"
+                    ))
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
             pass
     
-    try:
-        result = subprocess.run(
-            ["dpkg", "-l"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        if result.returncode == 0:
+    if 'dnf' in detected_pms:
+        dnf_cache = Path("/var/cache/dnf")
+        if dnf_cache.exists() and os.access(dnf_cache, os.R_OK):
             try:
-                autoremove_result = subprocess.run(
-                    ["apt-get", "autoremove", "--dry-run"],
-                    capture_output=True,
-                    text=True,
-                    timeout=30
-                )
-                if autoremove_result.returncode == 0:
-                    lines = autoremove_result.stdout.split("\n")
-                    packages = [l for l in lines if l.strip().startswith("Remv ")]
-                    if packages:
-                        items.append(CleanableItem(
-                            name="APT autoremove candidates",
-                            path="/var/lib/dpkg",
-                            size=0,
-                            command="sudo apt-get autoremove",
-                            description=f"{len(packages)} packages can be removed (dry-run shown)"
-                        ))
-            except (subprocess.TimeoutExpired, OSError):
+                size = get_directory_size(str(dnf_cache))
+                if size > 10 * 1024 * 1024:
+                    items.append(CleanableItem(
+                        name="DNF package cache",
+                        path="/var/cache/dnf",
+                        size=size,
+                        command="sudo dnf clean all",
+                        description="Clean DNF download cache"
+                    ))
+            except (PermissionError, OSError):
                 pass
-    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-        pass
-    
-    try:
-        result = subprocess.run(
-            ["deborphan"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            orphans = result.stdout.strip().split("\n")
-            if orphans and orphans[0]:
+        
+        try:
+            result = subprocess.run(
+                ["dnf", "autoremove", "--dry-run"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            if result.returncode == 0:
                 items.append(CleanableItem(
-                    name="Deborphan orphaned libraries",
-                    path="/var/lib/dpkg",
+                    name="DNF autoremove candidates",
+                    path="/var/lib/dnf",
                     size=0,
-                    command="sudo deborphan | xargs apt-get remove --purge -y",
-                    description=f"{len(orphans)} orphaned libraries found"
+                    command="sudo dnf autoremove",
+                    description="Remove unused packages"
                 ))
-    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-        pass
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
     
-    try:
-        result = subprocess.run(
-            ["flatpak", "list", "--app", "--columns=name"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            items.append(CleanableItem(
-                name="Flatpak apps",
-                path="/var/lib/flatpak",
-                size=0,
-                command="flatpak remove --unused",
-                description="Remove unused Flatpak runtimes"
-            ))
-    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-        pass
-    
-    try:
-        result = subprocess.run(
-            ["snap", "list"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            lines = result.stdout.strip().split("\n")
-            if len(lines) > 1:
+    if 'pacman' in detected_pms:
+        try:
+            result = subprocess.run(
+                ["pacman", "-Qtdq"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                orphans = result.stdout.strip().split("\n")
                 items.append(CleanableItem(
-                    name="Snap packages",
-                    path="/snap",
+                    name="Pacman orphaned packages",
+                    path="/var/lib/pacman",
                     size=0,
-                    command="snap list --all",
-                    description=f"{len(lines)-1} snap packages installed"
+                    command="sudo pacman -Rsn $(pacman -Qtdq)",
+                    description=f"{len(orphans)} orphaned packages"
                 ))
-    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-        pass
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
+        
+        try:
+            result = subprocess.run(
+                ["pacman", "-Q"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                kernels = [l for l in result.stdout.split("\n") if l.startswith("linux")]
+                if len(kernels) > 1:
+                    items.append(CleanableItem(
+                        name="Old kernel images (Pacman)",
+                        path="/boot",
+                        size=0,
+                        command="sudo pacman -Rsn $(pacman -Qqtd)",
+                        description="Remove old kernel versions"
+                    ))
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
+    
+    if 'zypper' in detected_pms:
+        zypper_cache = Path("/var/cache/zypper")
+        if zypper_cache.exists() and os.access(zypper_cache, os.R_OK):
+            try:
+                size = get_directory_size(str(zypper_cache))
+                if size > 10 * 1024 * 1024:
+                    items.append(CleanableItem(
+                        name="Zypper package cache",
+                        path="/var/cache/zypper",
+                        size=size,
+                        command="sudo zypper clean",
+                        description="Clean Zypper download cache"
+                    ))
+            except (PermissionError, OSError):
+                pass
+        
+        try:
+            result = subprocess.run(
+                ["zypper", "packages", "--uninstalled"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                items.append(CleanableItem(
+                    name="Zypper unused packages",
+                    path="/var/lib/zypper",
+                    size=0,
+                    command="sudo zypper rm -u",
+                    description="Remove unused packages"
+                ))
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
+    
+    if 'apk' in detected_pms:
+        apk_cache = Path("/var/cache/apk")
+        if apk_cache.exists() and os.access(apk_cache, os.R_OK):
+            try:
+                size = get_directory_size(str(apk_cache))
+                if size > 10 * 1024 * 1024:
+                    items.append(CleanableItem(
+                        name="APK package cache",
+                        path="/var/cache/apk",
+                        size=size,
+                        command="apk clean",
+                        description="Clean APK download cache"
+                    ))
+            except (PermissionError, OSError):
+                pass
+        
+        try:
+            result = subprocess.run(
+                ["apk", "info", "-e"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                items.append(CleanableItem(
+                    name="APK orphaned packages",
+                    path="/var/lib/apk",
+                    size=0,
+                    command="apk del -r $(apk info -e)",
+                    description="Remove unused packages"
+                ))
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
+    
+    if 'flatpak' in detected_pms:
+        try:
+            result = subprocess.run(
+                ["flatpak", "list", "--app", "--columns=name"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                items.append(CleanableItem(
+                    name="Flatpak apps",
+                    path="/var/lib/flatpak",
+                    size=0,
+                    command="flatpak remove --unused",
+                    description="Remove unused Flatpak runtimes"
+                ))
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
+    
+    if 'snap' in detected_pms:
+        try:
+            result = subprocess.run(
+                ["snap", "list"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                lines = result.stdout.strip().split("\n")
+                if len(lines) > 1:
+                    items.append(CleanableItem(
+                        name="Snap packages",
+                        path="/snap",
+                        size=0,
+                        command="snap list --all",
+                        description=f"{len(lines)-1} snap packages installed"
+                    ))
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
     
     return items
 

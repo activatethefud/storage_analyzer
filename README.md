@@ -17,7 +17,8 @@ A CLI tool to analyze storage space on Linux and get actionable cleanup suggesti
 - **List cleanable items** - Detect caches, logs, and other cleanable items
 - **Get suggestions** - Actionable recommendations with copy-paste commands
 - **Device filtering** - Get suggestions for specific partitions/drives
-- **Package manager cleanup** - Suggestions for apt, flatpak, snap, etc.
+- **Multi-distro support** - Detects available package managers and generates appropriate commands
+- **Package manager cleanup** - Suggestions for apt, dnf, pacman, zypper, apk, flatpak, snap, docker
 - **System cleanup** - Journal logs, old kernels, crash reports, etc.
 
 ## Quick Demo
@@ -217,16 +218,23 @@ storage-analyzer disk
 - Chrome cache (~/.cache/google-chrome)
 - Trash (~/.local/share/Trash)
 
-### System/Package Manager
-- APT package cache (/var/cache/apt)
-- APT autoremove candidates
-- Deborphan orphaned libraries
-- Flatpak unused runtimes
-- Docker unused images
+### Package Managers (auto-detected)
+The tool detects which package managers are installed and provides appropriate cleanup commands:
+
+| Manager | Clean Command | Autoremove | Old Kernels |
+|---------|---------------|------------|-------------|
+| apt | `apt-get clean` | `apt-get autoremove` | `apt-get autoremove --purge` |
+| dnf | `dnf clean all` | `dnf autoremove` | `dnf remove oldest-kernel` |
+| pacman | `pacman -Scc` | `pacman -Rsn $(pacman -Qtdq)` | (auto by pacman) |
+| zypper | `zypper clean` | `zypper rm -u` | `zypper rm -u kernel-default` |
+| apk | `apk clean` | `apk del -r $(apk info -e)` | `apk del linux-lts` |
+| flatpak | `flatpak remove --unused` | - | - |
+| snap | `snap list --all` | - | - |
+| docker | `docker image prune -a` | - | - |
 
 ### System Cleanup (requires root/sudo)
 - systemd journal logs (`journalctl --vacuum-size`)
-- Old kernel images (`apt-get autoremove --purge`)
+- Old kernel images (distro-specific commands)
 - Crash reports (/var/crash)
 - Old rotated log files
 

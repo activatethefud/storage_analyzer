@@ -314,3 +314,71 @@ def get_device_info(device: str) -> Optional[dict]:
         return None
     except (subprocess.TimeoutExpired, OSError, json.JSONDecodeError):
         return None
+
+
+def detect_distro() -> Optional[str]:
+    """
+    Detect the Linux distribution from /etc/os-release.
+    
+    Returns:
+        Distro ID (e.g., 'ubuntu', 'fedora', 'arch') or None
+    """
+    try:
+        os_release_file = Path('/etc/os-release')
+        if not os_release_file.exists():
+            return None
+        
+        distro_id = None
+        id_like = None
+        
+        for line in os_release_file.read_text().splitlines():
+            if line.startswith('ID='):
+                distro_id = line.split('=')[1].strip().strip('"')
+            elif line.startswith('ID_LIKE='):
+                id_like = line.split('=')[1].strip().strip('"')
+        
+        if distro_id:
+            return distro_id
+        
+        if id_like:
+            return id_like.split()[0]
+        
+        return None
+    except (OSError, IOError):
+        return None
+
+
+def detect_package_managers() -> list[str]:
+    """
+    Detect all available package managers on the system.
+    
+    Returns:
+        List of detected package manager names (e.g., ['apt', 'snap', 'flatpak'])
+    """
+    package_managers = {
+        'apt': 'apt',
+        'dnf': 'dnf',
+        'pacman': 'pacman',
+        'zypper': 'zypper',
+        'apk': 'apk',
+        'flatpak': 'flatpak',
+        'snap': 'snap',
+        'docker': 'docker',
+    }
+    
+    detected = []
+    
+    for name, command in package_managers.items():
+        try:
+            result = subprocess.run(
+                ['which', command],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                detected.append(name)
+        except (subprocess.TimeoutExpired, OSError):
+            continue
+    
+    return detected
