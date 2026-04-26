@@ -1,6 +1,7 @@
 """Cleanup suggestions and cleanable item detection."""
 import os
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -747,7 +748,7 @@ def get_temp_files_cleanup() -> list[CleanableItem]:
                 for entry in temp_dir.iterdir():
                     if entry.is_file():
                         try:
-                            age_days = (Path(__file__).stat().st_mtime - entry.stat().st_mtime) / 86400
+                            age_days = (time.time() - entry.stat().st_mtime) / 86400
                             if age_days > 7:
                                 total_size += entry.stat().st_size
                                 file_count += 1
@@ -779,7 +780,7 @@ def get_large_files(home: Optional[Path] = None, min_size_mb: int = 100) -> list
     try:
         for entry in home.rglob("*"):
             try:
-                if entry.is_file() and not entry.is_symlink():
+                if entry.is_file() and not os.path.islink(entry):
                     size = entry.stat().st_size
                     if size >= min_size:
                         items.append(CleanableItem(
