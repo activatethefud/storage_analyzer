@@ -26,6 +26,8 @@ A CLI tool to analyze storage space on Linux and get actionable cleanup suggesti
 - **Multi-distro support** - Detects available package managers and generates appropriate commands
 - **Package manager cleanup** - Suggestions for apt, dnf, pacman, zypper, apk, flatpak, snap, docker
 - **System cleanup** - Journal logs, old kernels, crash reports, etc.
+- **Temporary files cleanup** - Clean old temp files from /tmp, /var/tmp
+- **Large file detection** - Find files >100MB consuming space
 
 ## Quick Demo
 
@@ -222,7 +224,31 @@ storage-analyzer disk
 - Thumbnail cache (~/.cache/thumbnails)
 - Firefox cache (~/.cache/mozilla/firefox)
 - Chrome cache (~/.cache/google-chrome)
+- Chrome GPU cache (~/.config/google-chrome/Default/GPUCache)
 - Trash (~/.local/share/Trash)
+
+### Flatpak & AppImage
+- Flatpak cache (~/.cache/flatpak)
+- Flatpak data (~/.local/share/flatpak)
+- Flatpak apps data (~/.var/app)
+
+### Development Tools
+- npm global cache (~/.npm/_cacache)
+- bun cache (~/.cache/bun)
+- pnpm cache (~/.cache/pnpm)
+- cargo registry (~/.cargo/registry)
+- gradle caches (~/.gradle/caches)
+- maven repository (~/.m2/repository)
+- uv cache (~/.cache/uv)
+
+### Multimedia & Gaming
+- Steam cache (~/.steam)
+- VirtualBox cache (~/.cache/VirtualBox)
+- Rygel media server (~/.local/share/rygel, ~/.cache/rygel)
+- Lollypop music cache (~/.cache/lollypop)
+
+### IDE/Editor Caches
+- VS Code cache (~/.config/Code/Cache, ~/.config/Code/CacheData)
 
 ### Package Managers (auto-detected)
 The tool detects which package managers are installed and provides appropriate cleanup commands:
@@ -243,6 +269,7 @@ The tool detects which package managers are installed and provides appropriate c
 - Old kernel images (distro-specific commands)
 - Crash reports (/var/crash)
 - Old rotated log files
+- Old temporary files (/tmp, /var/tmp - files older than 7 days)
 
 ## Examples
 
