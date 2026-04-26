@@ -92,6 +92,17 @@ def get_user_cleanable_items() -> list[CleanableItem]:
         (".cache/yarn", "yarn cache", "yarn cache clean"),
         (".cache/thumbnails", "thumbnail cache", "rm -rf ~/.cache/thumbnails"),
         (".local/share/Trash", "trash", "rm -rf ~/.local/share/Trash/*"),
+        (".cache/flatpak", "flatpak cache", "rm -rf ~/.cache/flatpak"),
+        (".local/share/flatpak", "flatpak data", "flatpak remove --unused"),
+        (".var/app", "flatpak apps data", "rm -rf ~/.var/app"),
+        (".steam", "steam cache", "rm -rf ~/.steam/steam/content.windows*.STEAMAPPDATA/*"),
+        (".config/Code/Cache", "VS Code cache", "rm -rf ~/.config/Code/Cache"),
+        (".config/Code/CacheData", "VS Code cache data", "rm -rf ~/.config/Code/CacheData"),
+        (".config/google-chrome/Default/GPUCache", "Chrome GPU cache", "rm -rf ~/.config/google-chrome/Default/GPUCache"),
+        (".cache/VirtualBox", "VirtualBox cache", "rm -rf ~/.cache/VirtualBox"),
+        (".local/share/rygel", "rygel media server", "rm -rf ~/.local/share/rygel"),
+        (".cache/rygel", "rygel cache", "rm -rf ~/.cache/rygel"),
+        (".cache/lollypop", "lollypop cache", "rm -rf ~/.cache/lollypop"),
     ]
     
     for relative_path, name, cmd in cleanable_paths:
@@ -130,7 +141,37 @@ def get_user_cleanable_items() -> list[CleanableItem]:
                 command="rm -rf ~/.cache/google-chrome/*",
                 description="Clean Chrome browser cache"
             ))
-    
+
+    dev_caches = [
+        (".npm/_cacache", "npm global cache"),
+        (".cache/bun", "bun cache"),
+        (".cache/pnpm", "pnpm cache"),
+        (".cargo/registry", "cargo registry"),
+        (".gradle/caches", "gradle caches"),
+        (".m2/repository", "maven repository"),
+        (".cache/uv", "uv cache"),
+    ]
+
+    for cache_path, name in dev_caches:
+        full_path = home / cache_path
+        if full_path.exists():
+            size = get_directory_size(str(full_path))
+            if size > 0:
+                clean_cmd = f"rm -rf ~/{cache_path}"
+                if "cargo" in cache_path:
+                    clean_cmd = "cargo cache --empty"
+                elif "gradle" in cache_path:
+                    clean_cmd = "rm -rf ~/.gradle/caches"
+                elif "m2" in cache_path:
+                    clean_cmd = "rm -rf ~/.m2/repository"
+                items.append(CleanableItem(
+                    name=name,
+                    path=str(full_path),
+                    size=size,
+                    command=clean_cmd,
+                    description=f"Clean {name}"
+                ))
+
     return items
 
 
@@ -661,8 +702,100 @@ def get_package_cleanup_suggestions() -> list[CleanableItem]:
                     ))
         except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
             pass
+
+        try:
+            result = subprocess.run(
+                ["snap", "list", "--all"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                lines = result.stdout.strip().split("\n")
+                if len(lines) > 1:
+                    disabled_lines = [l for l in lines[1:] if "disabled" in l.lower()]
+                    if disabled_lines:
+                        items.append(CleanableItem(
+                            name="Snap disabled versions",
+                            path="/snap",
+                            size=0,
+                            command="sudo snap prune",
+                            description=f"{len(disabled_lines)} disabled snap versions can be removed"
+                        ))
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            pass
     
     return items
+
+
+def get_temp_files_cleanup() -> list[CleanableItem]:
+    """Find cleanable temporary files."""
+    items = []
+
+    temp_dirs = [
+        ("/tmp", "system /tmp"),
+        ("/var/tmp", "system /var/tmp"),
+        (str(Path.home() / ".cache"), "user cache"),
+    ]
+
+    for temp_path, name in temp_dirs:
+        temp_dir = Path(temp_path)
+        if temp_dir.exists() and os.access(temp_dir, os.R_OK):
+            try:
+                total_size = 0
+                file_count = 0
+                for entry in temp_dir.iterdir():
+                    if entry.is_file():
+                        try:
+                            age_days = (Path(__file__).stat().st_mtime - entry.stat().st_mtime) / 86400
+                            if age_days > 7:
+                                total_size += entry.stat().st_size
+                                file_count += 1
+                        except (OSError, PermissionError):
+                            continue
+
+                if total_size > 100 * 1024 * 1024:
+                    items.append(CleanableItem(
+                        name=f"Old temp files ({name})",
+                        path=temp_path,
+                        size=total_size,
+                        command=f"sudo find {temp_path} -type f -atime +7 -delete",
+                        description=f"Remove {file_count} temp files older than 7 days"
+                    ))
+            except (PermissionError, OSError):
+                pass
+
+    return items
+
+
+def get_large_files(home: Optional[Path] = None, min_size_mb: int = 100) -> list[CleanableItem]:
+    """Find large files in user's home directory."""
+    items = []
+    if home is None:
+        home = Path.home()
+
+    min_size = min_size_mb * 1024 * 1024
+
+    try:
+        for entry in home.rglob("*"):
+            try:
+                if entry.is_file() and not entry.is_symlink():
+                    size = entry.stat().st_size
+                    if size >= min_size:
+                        items.append(CleanableItem(
+                            name=f"Large file: {entry.name}",
+                            path=str(entry),
+                            size=size,
+                            command=f"rm '{entry}'",
+                            description=f"Large file ({format_size(size)})"
+                        ))
+            except (OSError, PermissionError):
+                continue
+    except (OSError, PermissionError):
+        pass
+
+    items.sort(key=lambda x: x.size, reverse=True)
+    return items[:20]
 
 
 def get_all_suggestions(device: Optional[str] = None) -> list[CleanableItem]:
@@ -681,6 +814,8 @@ def get_all_suggestions(device: Optional[str] = None) -> list[CleanableItem]:
     items.extend(get_docker_items())
     items.extend(get_package_cleanup_suggestions())
     items.extend(get_system_cleanup_suggestions())
+    items.extend(get_temp_files_cleanup())
+    items.extend(get_large_files())
     
     if os.geteuid() == 0:
         items.extend(get_system_cleanable_items())

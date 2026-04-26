@@ -6,7 +6,8 @@ from unittest.mock import patch, MagicMock
 from storage_analyzer.suggestions import (
     get_directory_size, get_user_cleanable_items,
     get_docker_items, get_all_suggestions,
-    format_suggestions, CleanableItem
+    format_suggestions, CleanableItem,
+    get_temp_files_cleanup, get_large_files
 )
 
 
@@ -281,3 +282,157 @@ class TestMultiPackageManager:
         
         assert 'clean' in PACKAGE_MANAGER_COMMANDS['apt']
         assert 'autoremove' in PACKAGE_MANAGER_COMMANDS['apt']
+
+
+class TestTempFilesCleanup:
+    """Tests for temporary files cleanup detection."""
+    
+    def test_returns_list(self):
+        """Test function returns a list."""
+        items = get_temp_files_cleanup()
+        assert isinstance(items, list)
+    
+    def test_cleanable_item_attributes(self):
+        """Test CleanableItem has required attributes."""
+        items = get_temp_files_cleanup()
+        
+        for item in items:
+            assert hasattr(item, 'name')
+            assert hasattr(item, 'path')
+            assert hasattr(item, 'size')
+            assert hasattr(item, 'command')
+            assert hasattr(item, 'description')
+
+
+class TestLargeFiles:
+    """Tests for large files detection."""
+    
+    def test_returns_list(self):
+        """Test function returns a list."""
+        items = get_large_files()
+        assert isinstance(items, list)
+    
+    def test_cleanable_item_attributes(self):
+        """Test CleanableItem has required attributes."""
+        items = get_large_files()
+        
+        for item in items:
+            assert hasattr(item, 'name')
+            assert hasattr(item, 'path')
+            assert hasattr(item, 'size')
+            assert hasattr(item, 'command')
+            assert hasattr(item, 'description')
+    
+    def test_respects_min_size(self):
+        """Test min_size parameter is respected."""
+        import tempfile
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            large_file = tmp_path / "large.bin"
+            large_file.write_bytes(b"x" * (150 * 1024 * 1024))
+            
+            items = get_large_files(tmp_path, min_size_mb=100)
+            assert len(items) > 0
+            assert any(item.size >= 100 * 1024 * 1024 for item in items)
+    
+    def test_respects_min_size_none_found(self):
+        """Test returns empty when no files meet threshold."""
+        import tempfile
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            small_file = tmp_path / "small.bin"
+            small_file.write_bytes(b"x" * 1024)
+            
+            items = get_large_files(tmp_path, min_size_mb=100)
+            assert len(items) == 0
+    
+    def test_limited_to_20_results(self):
+        """Test results are limited to 20 largest files."""
+        import tempfile
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            for i in range(30):
+                f = tmp_path / f"file{i}.bin"
+                f.write_bytes(b"x" * (1024 * 1024))
+            
+            items = get_large_files(tmp_path, min_size_mb=1)
+            assert len(items) <= 20
+
+
+class TestNewCleanablePaths:
+    """Tests for new cleanable paths."""
+    
+    def test_dev_caches_detected(self):
+        """Test development caches are detected."""
+        home = Path.home()
+        
+        dev_paths = [
+            ".cache/bun",
+            ".cache/pnpm", 
+            ".cargo/registry",
+            ".gradle/caches",
+            ".m2/repository",
+            ".cache/uv",
+        ]
+        
+        for dev_path in dev_paths:
+            full_path = home / dev_path
+            if full_path.exists():
+                items = get_user_cleanable_items()
+                names = [item.name for item in items]
+                assert any(dev_path.split("/")[-1] in n for n in names), f"Expected {dev_path} to be detected"
+    
+    def test_multimedia_caches_detected(self):
+        """Test multimedia caches are detected."""
+        home = Path.home()
+        
+        multimedia_paths = [
+            ".cache/VirtualBox",
+            ".local/share/rygel",
+            ".cache/rygel",
+            ".cache/lollypop",
+        ]
+        
+        for mm_path in multimedia_paths:
+            full_path = home / mm_path
+            if full_path.exists():
+                items = get_user_cleanable_items()
+                names = [item.name for item in items]
+                path_name = mm_path.split("/")[-1].lower()
+                assert any(path_name in n.lower() for n in names), f"Expected {mm_path} to be detected"
+    
+    def test_flatpak_paths_detected(self):
+        """Test flatpak paths are detected."""
+        home = Path.home()
+        
+        flatpak_paths = [
+            ".cache/flatpak",
+            ".local/share/flatpak",
+            ".var/app",
+        ]
+        
+        for fp_path in flatpak_paths:
+            full_path = home / fp_path
+            if full_path.exists():
+                items = get_user_cleanable_items()
+                names = [item.name for item in items]
+                assert any("flatpak" in n.lower() for n in names), f"Expected {fp_path} to be detected"
+    
+    def test_vscode_cache_detected(self):
+        """Test VS Code cache is detected."""
+        home = Path.home()
+        
+        vscode_paths = [
+            ".config/Code/Cache",
+            ".config/Code/CacheData",
+        ]
+        
+        for vc_path in vscode_paths:
+            full_path = home / vc_path
+            if full_path.exists():
+                items = get_user_cleanable_items()
+                names = [item.name for item in items]
+                assert any("code" in n.lower() or "cache" in n.lower() for n in names), f"Expected {vc_path} to be detected"
