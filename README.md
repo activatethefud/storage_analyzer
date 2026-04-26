@@ -9,6 +9,8 @@ A CLI tool to analyze storage space on Linux and get actionable cleanup suggesti
 - **Find largest directories** - See which directories use the most space
 - **List cleanable items** - Detect caches, logs, and other cleanable items
 - **Get suggestions** - Actionable recommendations with copy-paste commands
+- **Device filtering** - Get suggestions for specific partitions/drives
+- **Package manager cleanup** - Suggestions for apt, flatpak, snap, etc.
 
 ## Safety
 
@@ -25,10 +27,16 @@ pip install -e .
 
 ## Usage
 
+### List all drives/partitions
+```bash
+storage-analyzer drives
+```
+
 ### Scan a directory
 ```bash
 storage-analyzer scan /home
 storage-analyzer scan . --depth 3
+storage-analyzer scan /home /tmp
 ```
 
 ### Find largest files
@@ -45,12 +53,16 @@ storage-analyzer large-dirs /home --top 5
 
 ### List cleanable items
 ```bash
-storage-analyzer clean
+storage-analyzer clean                              # All cleanable items
+storage-analyzer clean --device /dev/sda2            # Only for root partition
+storage-analyzer clean --device /dev/sda4            # Only for /home partition
 ```
 
 ### Get cleanup suggestions
 ```bash
-storage-analyzer suggest
+storage-analyzer suggest                           # All suggestions
+storage-analyzer suggest --device /dev/sda2        # Only for root partition
+storage-analyzer suggest --device /dev/sda4        # Only for /home partition
 ```
 
 ### Show disk usage
@@ -58,8 +70,23 @@ storage-analyzer suggest
 storage-analyzer disk
 ```
 
+## How to Filter by Device
+
+1. First, list all available devices:
+   ```bash
+   storage-analyzer drives
+   ```
+
+2. Find the device you want (e.g., `/dev/sda2` for root, `/dev/sda4` for `/home`)
+
+3. Use `--device` option:
+   ```bash
+   storage-analyzer suggest --device /dev/sda2
+   ```
+
 ## Detected Cleanable Items
 
+### User Cache Files
 - pip cache (~/.cache/pip)
 - npm cache (~/.cache/npm)
 - yarn cache (~/.cache/yarn)
@@ -67,13 +94,27 @@ storage-analyzer disk
 - Firefox cache (~/.cache/mozilla/firefox)
 - Chrome cache (~/.cache/google-chrome)
 - Trash (~/.local/share/Trash)
+
+### System/Package Manager
+- APT package cache (/var/cache/apt)
+- APT autoremove candidates
+- Deborphan orphaned libraries
+- Flatpak unused runtimes
 - Docker unused images
+
+### System Logs
+- Compressed logs in /var/log
 
 ## Development
 
 ### Run tests
 ```bash
 python -m pytest tests/ -v
+```
+
+### Run specific test
+```bash
+python -m pytest tests/test_suggestions.py -v
 ```
 
 ## License

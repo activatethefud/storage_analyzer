@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from storage_analyzer.utils import format_size, get_home_directory
+from storage_analyzer.utils import format_size, get_home_directory, get_device_for_path
 
 
 @dataclass
@@ -291,8 +291,16 @@ def get_package_cleanup_suggestions() -> list[CleanableItem]:
     return items
 
 
-def get_all_suggestions() -> list[CleanableItem]:
-    """Get all cleanup suggestions."""
+def get_all_suggestions(device: Optional[str] = None) -> list[CleanableItem]:
+    """
+    Get all cleanup suggestions.
+    
+    Args:
+        device: Optional device path (e.g., /dev/sda2) to filter suggestions
+        
+    Returns:
+        List of CleanableItem, filtered to specified device if provided
+    """
     items = []
     
     items.extend(get_user_cleanable_items())
@@ -301,6 +309,14 @@ def get_all_suggestions() -> list[CleanableItem]:
     
     if os.geteuid() == 0:
         items.extend(get_system_cleanable_items())
+    
+    if device:
+        filtered_items = []
+        for item in items:
+            item_device = get_device_for_path(item.path)
+            if item_device == device:
+                filtered_items.append(item)
+        items = filtered_items
     
     items.sort(key=lambda x: x.size, reverse=True)
     return items

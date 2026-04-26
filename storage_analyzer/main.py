@@ -8,7 +8,7 @@ from rich import box
 from storage_analyzer.scanner import get_largest_files, get_largest_directories
 from storage_analyzer.analyzer import analyze_directory, get_path_disk_usage, scan_directory_tree
 from storage_analyzer.suggestions import get_all_suggestions, format_suggestions
-from storage_analyzer.utils import format_size, get_home_directory
+from storage_analyzer.utils import format_size, get_home_directory, get_all_devices, validate_device, get_mount_point_for_device, get_device_info
 
 console = Console()
 
@@ -126,11 +126,24 @@ def large_dirs(paths, top):
 
 
 @cli.command()
-def clean():
-    """List cleanable items (cache, logs, trash)."""
-    console.print("\n[bold cyan]Looking for cleanable items...[/bold cyan]\n")
+@click.option('--device', help='Filter by device (e.g., /dev/sda2, /dev/sda4)')
+def clean(device):
+    """List cleanable items (cache, logs, trash).
     
-    items = get_all_suggestions()
+    Use --device to filter suggestions to a specific partition.
+    Use 'storage-analyzer drives' to see available devices.
+    """
+    if device:
+        is_valid, error = validate_device(device)
+        if not is_valid:
+            console.print(f"[bold red]Error:[/bold red] {error}")
+            return
+        mountpoint = get_mount_point_for_device(device)
+        console.print(f"\n[bold cyan]Looking for cleanable items on:[/bold cyan] {device} (mounted at {mountpoint})\n")
+    else:
+        console.print("\n[bold cyan]Looking for cleanable items...[/bold cyan]\n")
+    
+    items = get_all_suggestions(device=device)
     
     if not items:
         console.print("[green]No cleanable items found![/green]")
@@ -152,11 +165,24 @@ def clean():
 
 
 @cli.command()
-def suggest():
-    """Get actionable cleanup suggestions."""
-    console.print("\n[bold cyan]Analyzing storage for cleanup suggestions...[/bold cyan]\n")
+@click.option('--device', help='Filter by device (e.g., /dev/sda2, /dev/sda4)')
+def suggest(device):
+    """Get actionable cleanup suggestions.
     
-    items = get_all_suggestions()
+    Use --device to get suggestions for a specific partition.
+    Use 'storage-analyzer drives' to see available devices.
+    """
+    if device:
+        is_valid, error = validate_device(device)
+        if not is_valid:
+            console.print(f"[bold red]Error:[/bold red] {error}")
+            return
+        mountpoint = get_mount_point_for_device(device)
+        console.print(f"\n[bold cyan]Analyzing storage for cleanup suggestions on:[/bold cyan] {device} (mounted at {mountpoint})\n")
+    else:
+        console.print("\n[bold cyan]Analyzing storage for cleanup suggestions...[/bold cyan]\n")
+    
+    items = get_all_suggestions(device=device)
     
     if not items:
         console.print("[green]No cleanup suggestions found. Your storage is clean![/green]")
@@ -198,6 +224,34 @@ def disk():
     table.add_row("Usage", f"{usage['percent_used']}%")
     
     console.print(table)
+
+
+@cli.command()
+def drives():
+    """List all block devices (disks and partitions).
+    
+    Shows all available drives and their mount points.
+    Use this to find the device path for --device option.
+    """
+    console.print("\n[bold cyan]Available Block Devices:[/bold cyan]\n")
+    
+    devices = get_all_devices()
+    
+    if not devices:
+        console.print("[yellow]No block devices found. Is lsblk available?[/yellow]")
+        return
+    
+    for disk in devices:
+        if disk.is_disk:
+            console.print(f"[bold cyan]Disk:[/bold cyan] {disk.device} ({disk.size})")
+            
+            if disk.children:
+                for part in disk.children:
+                    mount = part.mountpoint if part.mountpoint else "[bold red]not mounted[/bold red]"
+                    console.print(f"  └── {part.device}  {part.size}  {mount}")
+            else:
+                console.print(f"  [dim]No partitions[/dim]")
+            console.print()
 
 
 if __name__ == '__main__':

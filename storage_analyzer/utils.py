@@ -1,5 +1,8 @@
 """Utility functions for storage analyzer."""
 import os
+import subprocess
+import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -104,3 +107,210 @@ def get_disk_usage(path: str) -> tuple[int, int, int]:
     free = stat.f_bfree * stat.f_frsize
     used = total - free
     return (total, used, free)
+
+
+@dataclass
+class BlockDevice:
+    """Represents a block device."""
+    device: str
+    size: str
+    mountpoint: Optional[str]
+    device_type: str
+    children: list['BlockDevice']
+    
+    @property
+    def is_partition(self) -> bool:
+        return self.device_type == 'part'
+    
+    @property
+    def is_disk(self) -> bool:
+        return self.device_type == 'disk'
+
+
+def get_device_for_path(path: str) -> Optional[str]:
+    """
+    Get the device (e.g., /dev/sda2) for a given path.
+    
+    Args:
+        path: Any path on the filesystem
+        
+    Returns:
+        Device path (e.g., /dev/sda2) or None if not found
+    """
+    try:
+        result = subprocess.run(
+            ['df', '-P', path],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode != 0:
+            return None
+        
+        lines = result.stdout.strip().split('\n')
+        if len(lines) < 2:
+            return None
+        
+        parts = lines[1].split()
+        if len(parts) < 1:
+            return None
+        
+        device = parts[0]
+        if device.startswith('/dev/'):
+            return device
+        return None
+    except (subprocess.TimeoutExpired, OSError, IndexError):
+        return None
+
+
+def get_mount_point_for_device(device: str) -> Optional[str]:
+    """
+    Get the mount point for a device.
+    
+    Args:
+        device: Device path (e.g., /dev/sda2)
+        
+    Returns:
+        Mount point (e.g., /, /home) or None if not mounted
+    """
+    try:
+        result = subprocess.run(
+            ['lsblk', '-J', '-o', 'MOUNTPOINT', device],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode != 0:
+            return None
+        
+        data = json.loads(result.stdout)
+        blockdevices = data.get('blockdevices', [])
+        if not blockdevices:
+            return None
+        
+        return blockdevices[0].get('mountpoint')
+    except (subprocess.TimeoutExpired, OSError, json.JSONDecodeError, KeyError):
+        return None
+
+
+def get_all_devices() -> list[BlockDevice]:
+    """
+    Get all block devices with their mount points.
+    
+    Returns:
+        List of BlockDevice objects
+    """
+    devices = []
+    
+    try:
+        result = subprocess.run(
+            ['lsblk', '-J', '-o', 'NAME,SIZE,TYPE,MOUNTPOINT,PATH'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode != 0:
+            return devices
+        
+        data = json.loads(result.stdout)
+        blockdevices = data.get('blockdevices', [])
+        
+        for bd in blockdevices:
+            device = BlockDevice(
+                device=bd.get('path', ''),
+                size=bd.get('size', ''),
+                mountpoint=bd.get('mountpoint'),
+                device_type=bd.get('type', 'disk'),
+                children=[]
+            )
+            
+            for child in bd.get('children', []):
+                child_device = BlockDevice(
+                    device=child.get('path', ''),
+                    size=child.get('size', ''),
+                    mountpoint=child.get('mountpoint'),
+                    device_type=child.get('type', 'part'),
+                    children=[]
+                )
+                device.children.append(child_device)
+            
+            devices.append(device)
+        
+    except (subprocess.TimeoutExpired, OSError, json.JSONDecodeError):
+        pass
+    
+    return devices
+
+
+def validate_device(device: str) -> tuple[bool, Optional[str]]:
+    """
+    Validate a device exists and is mounted.
+    
+    Args:
+        device: Device path (e.g., /dev/sda2)
+        
+    Returns:
+        Tuple of (is_valid, error_message)
+        If valid, error_message is None
+    """
+    if not device.startswith('/dev/'):
+        return False, f"Invalid device format: '{device}'. Device must start with /dev/"
+    
+    if not os.path.exists(device):
+        return False, f"Device '{device}' not found. Use 'lsblk' to list available devices."
+    
+    mountpoint = get_mount_point_for_device(device)
+    if mountpoint is None:
+        return False, f"Device '{device}' is not mounted. Cannot analyze unmounted devices."
+    
+    return True, None
+
+
+def get_device_info(device: str) -> Optional[dict]:
+    """
+    Get detailed information about a device.
+    
+    Args:
+        device: Device path (e.g., /dev/sda2)
+        
+    Returns:
+        Dictionary with device info or None if not found
+    """
+    try:
+        result = subprocess.run(
+            ['lsblk', '-J', '-o', 'NAME,SIZE,TYPE,MOUNTPOINT,PATH,MODEL,SERIAL'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode != 0:
+            return None
+        
+        data = json.loads(result.stdout)
+        
+        def find_device(blockdevices, target_device):
+            for bd in blockdevices:
+                if bd.get('path') == target_device:
+                    return bd
+                if bd.get('children'):
+                    found = find_device(bd['children'], target_device)
+                    if found:
+                        return found
+            return None
+        
+        blockdevices = data.get('blockdevices', [])
+        bd = find_device(blockdevices, device)
+        
+        if bd:
+            return {
+                'device': bd.get('path', ''),
+                'size': bd.get('size', ''),
+                'type': bd.get('type', ''),
+                'mountpoint': bd.get('mountpoint'),
+                'model': bd.get('model'),
+                'serial': bd.get('serial')
+            }
+        
+        return None
+    except (subprocess.TimeoutExpired, OSError, json.JSONDecodeError):
+        return None

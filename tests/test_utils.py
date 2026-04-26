@@ -4,7 +4,9 @@ import pytest
 from pathlib import Path
 from storage_analyzer.utils import (
     format_size, get_home_directory, sanitize_path,
-    is_safe_to_delete, get_disk_usage
+    is_safe_to_delete, get_disk_usage, get_device_for_path,
+    get_mount_point_for_device, get_all_devices, validate_device,
+    get_device_info
 )
 
 
@@ -83,3 +85,61 @@ class TestGetDiskUsage:
         assert total >= 0
         assert used >= 0
         assert free >= 0
+
+
+class TestDeviceMapping:
+    """Tests for device mapping functions."""
+    
+    def test_get_device_for_path_root(self):
+        """Test getting device for root path."""
+        device = get_device_for_path("/")
+        assert device is not None
+        assert device.startswith("/dev/")
+    
+    def test_get_device_for_path_home(self):
+        """Test getting device for home path."""
+        device = get_device_for_path("/home")
+        assert device is not None
+        assert device.startswith("/dev/")
+    
+    def test_get_mount_point_for_device(self):
+        """Test getting mount point for device."""
+        mountpoint = get_mount_point_for_device("/dev/sda2")
+        assert mountpoint == "/"
+    
+    def test_get_all_devices(self):
+        """Test getting all devices."""
+        devices = get_all_devices()
+        assert isinstance(devices, list)
+        assert len(devices) > 0
+    
+    def test_validate_device_valid(self):
+        """Test validating a valid device."""
+        is_valid, error = validate_device("/dev/sda2")
+        assert is_valid is True
+        assert error is None
+    
+    def test_validate_device_invalid_format(self):
+        """Test validating device with invalid format."""
+        is_valid, error = validate_device("invalid")
+        assert is_valid is False
+        assert "Invalid device format" in error
+    
+    def test_validate_device_not_found(self):
+        """Test validating non-existent device."""
+        is_valid, error = validate_device("/dev/sda999")
+        assert is_valid is False
+        assert "not found" in error
+    
+    def test_validate_device_not_mounted(self):
+        """Test validating unmounted device."""
+        is_valid, error = validate_device("/dev/sda")
+        assert is_valid is False
+        assert "not mounted" in error
+    
+    def test_get_device_info(self):
+        """Test getting device info."""
+        info = get_device_info("/dev/sda2")
+        assert info is not None
+        assert "device" in info
+        assert "mountpoint" in info
