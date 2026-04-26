@@ -330,7 +330,7 @@ class TestLargeFiles:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
             large_file = tmp_path / "large.bin"
-            large_file.write_bytes(b"x" * (150 * 1024 * 1024))
+            large_file.write_bytes(b"x" * (110 * 1024 * 1024))
             
             items = get_large_files(tmp_path, min_size_mb=100)
             assert len(items) > 0
@@ -354,9 +354,9 @@ class TestLargeFiles:
         
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_path = Path(tmpdir)
-            for i in range(30):
+            for i in range(25):
                 f = tmp_path / f"file{i}.bin"
-                f.write_bytes(b"x" * (1024 * 1024))
+                f.write_bytes(b"x" * (2 * 1024 * 1024))
             
             items = get_large_files(tmp_path, min_size_mb=1)
             assert len(items) <= 20
