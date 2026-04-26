@@ -4,6 +4,8 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich import box
+from rich.progress import Progress, SpinnerColumn, BarColumn, TaskProgressColumn, TextColumn, TimeRemainingColumn
+from rich.live import Live
 
 from storage_analyzer.scanner import get_largest_files, get_largest_directories
 from storage_analyzer.analyzer import analyze_directory, get_path_disk_usage, scan_directory_tree
@@ -11,6 +13,15 @@ from storage_analyzer.suggestions import get_all_suggestions, format_suggestions
 from storage_analyzer.utils import format_size, get_home_directory, get_all_devices, validate_device, get_mount_point_for_device, get_device_info
 
 console = Console()
+
+progress = Progress(
+    SpinnerColumn(),
+    TextColumn("[progress.description]{task.description}"),
+    BarColumn(),
+    TaskProgressColumn(),
+    console=console,
+    transient=True
+)
 
 
 @click.group()
@@ -30,7 +41,10 @@ def scan(paths, depth):
         console.print(f"[dim]Depth: {depth}[/dim]\n")
         
         try:
-            result = analyze_directory(path, max_depth=depth)
+            with progress:
+                task = progress.add_task(f"[cyan]Analyzing {path}...", total=None)
+                result = analyze_directory(path, max_depth=depth)
+                progress.update(task, completed=True)
             
             console.print(Panel(
                 f"[bold]Total Size:[/bold] {format_size(result.total_size)}\n"
@@ -74,7 +88,10 @@ def large_files(paths, top):
         console.print(f"\n[bold cyan]Finding largest files in:[/bold cyan] {path}\n")
         
         try:
-            files = get_largest_files(path, top=top)
+            with progress:
+                task = progress.add_task("[cyan]Scanning for large files...", total=None)
+                files = get_largest_files(path, top=top)
+                progress.update(task, completed=True)
             
             if not files:
                 console.print("[yellow]No files found.[/yellow]")
@@ -104,7 +121,10 @@ def large_dirs(paths, top):
         console.print(f"\n[bold cyan]Finding largest directories in:[/bold cyan] {path}\n")
         
         try:
-            dirs = get_largest_directories(path, top=top)
+            with progress:
+                task = progress.add_task("[cyan]Scanning for large directories...", total=None)
+                dirs = get_largest_directories(path, top=top)
+                progress.update(task, completed=True)
             
             if not dirs:
                 console.print("[yellow]No directories found.[/yellow]")
@@ -143,7 +163,10 @@ def clean(device):
     else:
         console.print("\n[bold cyan]Looking for cleanable items...[/bold cyan]\n")
     
-    items = get_all_suggestions(device=device)
+    with progress:
+        task = progress.add_task("[cyan]Scanning for cleanable items...", total=None)
+        items = get_all_suggestions(device=device)
+        progress.update(task, completed=True)
     
     if not items:
         console.print("[green]No cleanable items found![/green]")
@@ -182,7 +205,10 @@ def suggest(device):
     else:
         console.print("\n[bold cyan]Analyzing storage for cleanup suggestions...[/bold cyan]\n")
     
-    items = get_all_suggestions(device=device)
+    with progress:
+        task = progress.add_task("[cyan]Scanning for cleanup suggestions...", total=None)
+        items = get_all_suggestions(device=device)
+        progress.update(task, completed=True)
     
     if not items:
         console.print("[green]No cleanup suggestions found. Your storage is clean![/green]")
@@ -235,7 +261,10 @@ def drives():
     """
     console.print("\n[bold cyan]Available Block Devices:[/bold cyan]\n")
     
-    devices = get_all_devices()
+    with progress:
+        task = progress.add_task("[cyan]Scanning block devices...", total=None)
+        devices = get_all_devices()
+        progress.update(task, completed=True)
     
     if not devices:
         console.print("[yellow]No block devices found. Is lsblk available?[/yellow]")
