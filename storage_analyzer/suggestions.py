@@ -176,12 +176,128 @@ def get_system_cleanable_items() -> list[CleanableItem]:
     return items
 
 
+def get_package_cleanup_suggestions() -> list[CleanableItem]:
+    """
+    Find cleanup suggestions from package managers.
+    
+    Returns suggestions for apt, flatpak, snap, etc.
+    """
+    items = []
+    
+    apt_cache = Path("/var/cache/apt")
+    if apt_cache.exists() and os.access(apt_cache, os.R_OK):
+        try:
+            size = get_directory_size(str(apt_cache))
+            if size > 10 * 1024 * 1024:
+                items.append(CleanableItem(
+                    name="APT package cache",
+                    path="/var/cache/apt",
+                    size=size,
+                    command="sudo apt-get clean",
+                    description="Clean APT download cache"
+                ))
+        except (PermissionError, OSError):
+            pass
+    
+    try:
+        result = subprocess.run(
+            ["dpkg", "-l"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            try:
+                autoremove_result = subprocess.run(
+                    ["apt-get", "autoremove", "--dry-run"],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                if autoremove_result.returncode == 0:
+                    lines = autoremove_result.stdout.split("\n")
+                    packages = [l for l in lines if l.strip().startswith("Remv ")]
+                    if packages:
+                        items.append(CleanableItem(
+                            name="APT autoremove candidates",
+                            path="/var/lib/dpkg",
+                            size=0,
+                            command="sudo apt-get autoremove",
+                            description=f"{len(packages)} packages can be removed (dry-run shown)"
+                        ))
+            except (subprocess.TimeoutExpired, OSError):
+                pass
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+    
+    try:
+        result = subprocess.run(
+            ["deborphan"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            orphans = result.stdout.strip().split("\n")
+            if orphans and orphans[0]:
+                items.append(CleanableItem(
+                    name="Deborphan orphaned libraries",
+                    path="/var/lib/dpkg",
+                    size=0,
+                    command="sudo deborphan | xargs apt-get remove --purge -y",
+                    description=f"{len(orphans)} orphaned libraries found"
+                ))
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+    
+    try:
+        result = subprocess.run(
+            ["flatpak", "list", "--app", "--columns=name"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            items.append(CleanableItem(
+                name="Flatpak apps",
+                path="/var/lib/flatpak",
+                size=0,
+                command="flatpak remove --unused",
+                description="Remove unused Flatpak runtimes"
+            ))
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+    
+    try:
+        result = subprocess.run(
+            ["snap", "list"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            lines = result.stdout.strip().split("\n")
+            if len(lines) > 1:
+                items.append(CleanableItem(
+                    name="Snap packages",
+                    path="/snap",
+                    size=0,
+                    command="snap list --all",
+                    description=f"{len(lines)-1} snap packages installed"
+                ))
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+    
+    return items
+
+
 def get_all_suggestions() -> list[CleanableItem]:
     """Get all cleanup suggestions."""
     items = []
     
     items.extend(get_user_cleanable_items())
     items.extend(get_docker_items())
+    items.extend(get_package_cleanup_suggestions())
     
     if os.geteuid() == 0:
         items.extend(get_system_cleanable_items())

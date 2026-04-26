@@ -147,3 +147,56 @@ class TestGetAllSuggestions:
         if len(items) >= 2:
             for i in range(len(items) - 1):
                 assert items[i].size >= items[i + 1].size
+
+
+class TestPackageCleanupSuggestions:
+    """Tests for package manager cleanup suggestions."""
+    
+    def test_returns_list(self):
+        """Test function returns a list."""
+        from storage_analyzer.suggestions import get_package_cleanup_suggestions
+        items = get_package_cleanup_suggestions()
+        assert isinstance(items, list)
+    
+    def test_cleanable_item_attributes(self):
+        """Test CleanableItem has required attributes."""
+        from storage_analyzer.suggestions import get_package_cleanup_suggestions
+        items = get_package_cleanup_suggestions()
+        
+        for item in items:
+            assert hasattr(item, 'name')
+            assert hasattr(item, 'path')
+            assert hasattr(item, 'size')
+            assert hasattr(item, 'command')
+            assert hasattr(item, 'description')
+    
+    @patch('subprocess.run')
+    def test_apt_cache_detected(self, mock_run):
+        """Test APT cache detection."""
+        from storage_analyzer.suggestions import get_package_cleanup_suggestions
+        
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_run.return_value = mock_result
+        
+        items = get_package_cleanup_suggestions()
+        names = [item.name for item in items]
+        assert any("APT" in n for n in names)
+    
+    @patch('subprocess.run')
+    def test_flatpak_checked(self, mock_run):
+        """Test flatpak is checked."""
+        from storage_analyzer.suggestions import get_package_cleanup_suggestions
+        import subprocess
+        
+        def side_effect(*args, **kwargs):
+            cmd = args[0]
+            if 'flatpak' in cmd:
+                raise FileNotFoundError()
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            return mock_result
+        
+        mock_run.side_effect = side_effect
+        items = get_package_cleanup_suggestions()
+        assert isinstance(items, list)
