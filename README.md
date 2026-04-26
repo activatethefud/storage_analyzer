@@ -1,4 +1,4 @@
-# Storage Analyzer
+# Storage Analyzer - Linux CLI Tool to Analyze Storage & Find Cleanup Suggestions
 
 A CLI tool to analyze storage space on Linux and get actionable cleanup suggestions.
 
@@ -8,6 +8,12 @@ A CLI tool to analyze storage space on Linux and get actionable cleanup suggesti
 ║              Analyze storage on Linux and get cleanup suggestions           ║
 ╚═══════════════════════════════════════════════════════════════════════════════╝
 ```
+
+[![PyPI version](https://img.shields.io/pypi/v/storage-analyzer)](https://pypi.org/project/storage-analyzer/)
+[![Python versions](https://img.shields.io/pypi/pyversions/storage-analyzer)](https://pypi.org/project/storage-analyzer/)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Tests](https://github.com/activatethefud/storage_analyzer/actions/workflows/test.yml/badge.svg)](https://github.com/activatethefud/storage_analyzer/actions)
+[![Build](https://github.com/activatethefud/storage_analyzer/actions/workflows/build.yml/badge.svg)](https://github.com/activatethefud/storage_analyzer/actions)
 
 ## Features
 
