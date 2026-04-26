@@ -45,6 +45,16 @@ To add new commands:
 3. Use Rich tables and panels for output
 4. Add tests in `tests/test_main.py`
 
+## Releasing
+
+To trigger the build workflow and create GitHub Releases:
+
+```bash
+git tag v<version> && git push --tags
+```
+
+The workflow builds standalone executables for Linux, Windows, and macOS, then creates a GitHub Release with the artifacts.
+
 ## Code Style
 
 - Use type hints
