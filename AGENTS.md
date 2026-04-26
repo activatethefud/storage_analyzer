@@ -55,6 +55,8 @@ git tag v<version> && git push --tags
 
 The workflow builds standalone executables for Linux, Windows, and macOS, then creates a GitHub Release with the artifacts.
 
+**Self-reminder:** When significant features or fixes are complete, create and push a version tag to trigger builds and release.
+
 ## Code Style
 
 - Use type hints
