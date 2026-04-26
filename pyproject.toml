@@ -6,7 +6,6 @@ name = "storage-analyzer"
 version = "0.1.0"
 description = "A CLI tool to analyze storage space and suggest cleanup on Linux"
 keywords = ["linux", "storage", "disk-usage", "cli", "cleanup", "disk-space", "filesystem", "du", "ncdu", "baobab"]
-short_description = "Analyze disk space and get cleanup suggestions on Linux"
 authors = [{name = "Nikola", email = "nikola@example.com"}]
 requires-python = ">=3.10"
 dependencies = [
