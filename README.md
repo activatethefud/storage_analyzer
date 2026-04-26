@@ -275,7 +275,7 @@ python -m pytest tests/test_suggestions.py -v
 
 ## License
 
-MIT
+GNU General Public License v3 (GPLv3)
 
 ---
 
