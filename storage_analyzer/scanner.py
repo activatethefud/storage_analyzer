@@ -2,7 +2,7 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Callable
 
 
 @dataclass
@@ -13,13 +13,14 @@ class FileInfo:
     is_dir: bool
 
 
-def scan_directory(path: str, max_depth: Optional[int] = None) -> Iterator[FileInfo]:
+def scan_directory(path: str, max_depth: Optional[int] = None, progress_callback: Optional[Callable[[int], None]] = None) -> Iterator[FileInfo]:
     """
     Scan a directory recursively and yield file information.
     
     Args:
         path: Root directory to scan
         max_depth: Maximum depth to traverse (None for unlimited)
+        progress_callback: Optional callback called periodically with file count
     
     Yields:
         FileInfo for each file/directory encountered
@@ -33,7 +34,11 @@ def scan_directory(path: str, max_depth: Optional[int] = None) -> Iterator[FileI
         yield FileInfo(str(root), os.path.getsize(root), False)
         return
     
+    file_count = 0
+    
     def walk_recursive(current: Path, depth: int):
+        nonlocal file_count
+        
         if max_depth is not None and depth > max_depth:
             return
         
@@ -43,6 +48,11 @@ def scan_directory(path: str, max_depth: Optional[int] = None) -> Iterator[FileI
                     is_dir = entry.is_dir(follow_symlinks=False)
                     size = 0 if is_dir else entry.stat(follow_symlinks=False).st_size
                     yield FileInfo(entry.path, size, is_dir)
+                    
+                    file_count += 1
+                    if progress_callback and file_count % 100 == 0:
+                        progress_callback(file_count)
+                    
                     if is_dir:
                         yield from walk_recursive(Path(entry.path), depth + 1)
                 except (PermissionError, OSError):
@@ -51,6 +61,9 @@ def scan_directory(path: str, max_depth: Optional[int] = None) -> Iterator[FileI
             return
     
     yield from walk_recursive(root, 0)
+    
+    if progress_callback:
+        progress_callback(file_count)
 
 
 def get_directory_size(path: str) -> int:

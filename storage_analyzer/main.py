@@ -4,8 +4,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich import box
-from rich.progress import Progress, SpinnerColumn, BarColumn, TaskProgressColumn, TextColumn, TimeRemainingColumn
-from rich.live import Live
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
 
 from storage_analyzer.scanner import get_largest_files, get_largest_directories
 from storage_analyzer.analyzer import analyze_directory, get_path_disk_usage, scan_directory_tree
@@ -14,21 +13,26 @@ from storage_analyzer.utils import format_size, get_home_directory, get_all_devi
 
 console = Console()
 
-progress = Progress(
-    SpinnerColumn(),
-    TextColumn("[progress.description]{task.description}"),
-    BarColumn(),
-    TaskProgressColumn(),
-    console=console,
-    transient=True
-)
-
 
 @click.group()
 @click.version_option(version='0.1.0')
 def cli():
     """Storage Analyzer - Analyze storage space on Linux and get cleanup suggestions."""
     pass
+
+
+def create_progress():
+    """Create a progress bar instance."""
+    return Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TimeRemainingColumn(),
+        console=console,
+        transient=False
+    )
 
 
 @cli.command()
@@ -41,10 +45,15 @@ def scan(paths, depth):
         console.print(f"[dim]Depth: {depth}[/dim]\n")
         
         try:
-            with progress:
-                task = progress.add_task(f"[cyan]Analyzing {path}...", total=None)
-                result = analyze_directory(path, max_depth=depth)
-                progress.update(task, completed=True)
+            file_count = [0]
+            
+            def progress_callback(count):
+                file_count[0] = count
+            
+            with create_progress() as progress:
+                task = progress.add_task("[cyan]Scanning files...", total=None, start=False)
+                result = analyze_directory(path, max_depth=depth, progress_callback=progress_callback)
+                progress.update(task, completed=True, description=f"[green]Scanned {result.file_count} files, {result.dir_count} directories")
             
             console.print(Panel(
                 f"[bold]Total Size:[/bold] {format_size(result.total_size)}\n"
@@ -88,10 +97,15 @@ def large_files(paths, top):
         console.print(f"\n[bold cyan]Finding largest files in:[/bold cyan] {path}\n")
         
         try:
-            with progress:
-                task = progress.add_task("[cyan]Scanning for large files...", total=None)
+            file_count = [0]
+            
+            def progress_callback(count):
+                file_count[0] = count
+            
+            with create_progress() as progress:
+                task = progress.add_task("[cyan]Scanning for large files...", total=None, start=False)
                 files = get_largest_files(path, top=top)
-                progress.update(task, completed=True)
+                progress.update(task, completed=True, description=f"[green]Found {len(files)} large files (scanned {file_count[0]} files)")
             
             if not files:
                 console.print("[yellow]No files found.[/yellow]")
@@ -121,10 +135,15 @@ def large_dirs(paths, top):
         console.print(f"\n[bold cyan]Finding largest directories in:[/bold cyan] {path}\n")
         
         try:
-            with progress:
-                task = progress.add_task("[cyan]Scanning for large directories...", total=None)
+            file_count = [0]
+            
+            def progress_callback(count):
+                file_count[0] = count
+            
+            with create_progress() as progress:
+                task = progress.add_task("[cyan]Scanning for large directories...", total=None, start=False)
                 dirs = get_largest_directories(path, top=top)
-                progress.update(task, completed=True)
+                progress.update(task, completed=True, description=f"[green]Found {len(dirs)} large directories (scanned {file_count[0]} items)")
             
             if not dirs:
                 console.print("[yellow]No directories found.[/yellow]")
@@ -163,10 +182,10 @@ def clean(device):
     else:
         console.print("\n[bold cyan]Looking for cleanable items...[/bold cyan]\n")
     
-    with progress:
-        task = progress.add_task("[cyan]Scanning for cleanable items...", total=None)
+    with create_progress() as progress:
+        task = progress.add_task("[cyan]Scanning for cleanable items...", total=None, start=False)
         items = get_all_suggestions(device=device)
-        progress.update(task, completed=True)
+        progress.update(task, completed=True, description=f"[green]Found {len(items)} cleanable items")
     
     if not items:
         console.print("[green]No cleanable items found![/green]")
@@ -205,10 +224,10 @@ def suggest(device):
     else:
         console.print("\n[bold cyan]Analyzing storage for cleanup suggestions...[/bold cyan]\n")
     
-    with progress:
-        task = progress.add_task("[cyan]Scanning for cleanup suggestions...", total=None)
+    with create_progress() as progress:
+        task = progress.add_task("[cyan]Scanning for cleanup suggestions...", total=None, start=False)
         items = get_all_suggestions(device=device)
-        progress.update(task, completed=True)
+        progress.update(task, completed=True, description=f"[green]Found {len(items)} suggestions")
     
     if not items:
         console.print("[green]No cleanup suggestions found. Your storage is clean![/green]")
@@ -261,10 +280,10 @@ def drives():
     """
     console.print("\n[bold cyan]Available Block Devices:[/bold cyan]\n")
     
-    with progress:
-        task = progress.add_task("[cyan]Scanning block devices...", total=None)
+    with create_progress() as progress:
+        task = progress.add_task("[cyan]Scanning block devices...", total=None, start=False)
         devices = get_all_devices()
-        progress.update(task, completed=True)
+        progress.update(task, completed=True, description=f"[green]Found {len(devices)} devices")
     
     if not devices:
         console.print("[yellow]No block devices found. Is lsblk available?[/yellow]")

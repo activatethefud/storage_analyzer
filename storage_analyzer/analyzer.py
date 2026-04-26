@@ -2,7 +2,7 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable
 
 from storage_analyzer.scanner import (
     scan_directory, get_largest_files, get_largest_directories, FileInfo
@@ -32,13 +32,14 @@ class AnalysisResult:
     largest_dirs: list[DirectorySize]
 
 
-def analyze_directory(path: str, max_depth: Optional[int] = None) -> AnalysisResult:
+def analyze_directory(path: str, max_depth: Optional[int] = None, progress_callback: Optional[Callable[[int], None]] = None) -> AnalysisResult:
     """
     Analyze a directory and return comprehensive statistics.
     
     Args:
         path: Directory to analyze
         max_depth: Maximum depth to scan
+        progress_callback: Optional callback called with file count during scan
         
     Returns:
         AnalysisResult with statistics
@@ -51,7 +52,7 @@ def analyze_directory(path: str, max_depth: Optional[int] = None) -> AnalysisRes
     file_count = 0
     dir_count = 0
     
-    for info in scan_directory(path, max_depth=max_depth):
+    for info in scan_directory(path, max_depth=max_depth, progress_callback=progress_callback):
         if info.is_dir:
             dir_count += 1
         else:
