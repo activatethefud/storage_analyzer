@@ -2,6 +2,13 @@
 
 A CLI tool to analyze storage space on Linux and get actionable cleanup suggestions.
 
+```
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                        STORAGE ANALYZER                                       ║
+║              Analyze storage on Linux and get cleanup suggestions           ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+```
+
 ## Features
 
 - **Scan directories** - See size breakdown by subdirectories
@@ -13,12 +20,102 @@ A CLI tool to analyze storage space on Linux and get actionable cleanup suggesti
 - **Package manager cleanup** - Suggestions for apt, flatpak, snap, etc.
 - **System cleanup** - Journal logs, old kernels, crash reports, etc.
 
+## Quick Demo
+
+### List Drives
+```bash
+$ storage-analyzer drives
+
+Available Block Devices:
+
+Disk: /dev/sda (238.5G)
+  └── /dev/sda1  976M   /boot/efi
+  └── /dev/sda2  65.2G  /
+  └── /dev/sda3  7.9G   [SWAP]
+  └── /dev/sda4  145.3G /home
+```
+
+### Get Cleanup Suggestions
+```bash
+$ storage-analyzer suggest --device /dev/sda2
+
+Analyzing storage for cleanup suggestions on: /dev/sda2 (mounted at /)
+
+⠧ Found 3 suggestions
+╭───────────────────── 1. systemd journal logs (160.0 MB) ─────────────────────╮
+│ Path: /var/log/journal                                                       │
+│                                                                              │
+│ Command to run:                                                              │
+│ sudo journalctl --vacuum-size=100M                                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────── 2. APT package cache (132.7 MB) ───────────────────────╮
+│ Path: /var/cache/apt                                                         │
+│                                                                              │
+│ Command to run:                                                              │
+│ sudo apt-get clean                                                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────── 3. Old kernel images (0 B) ─────────────────────────╮
+│ Path: /boot                                                                  │
+│                                                                              │
+│ Command to run:                                                              │
+│ sudo apt-get autoremove --purge                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────── Summary ───────────────────────────────────╮
+│ Total potential savings: 292.7 MB                                           ║
+╰──────────────────────────────────────────────────────────────────────────────╯
+```
+
+### Scan Directory
+```bash
+$ storage-analyzer scan /home --depth 2
+
+Scanning: /home
+Depth: 2
+
+⠸ Scanned 1234 files, 567 directories
+╭────────────────────────────────── Summary ───────────────────────────────────╮
+│ Total Size: 45.3 GB                                                          │
+│ Files: 1234                                                                  │
+│ Directories: 567                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+Top Directories:
+                                                                                
+  Path                                                    Size                   ───────────────────────────────────────────────────────────────────── 
+  /home/user/Downloads                            15.2 GB                   
+  /home/user/.cache                                8.3 GB                    
+  /home/user/Videos                                12.1 GB                    
+  ...
+```
+
+### Show Disk Usage
+```bash
+$ storage-analyzer disk
+
+Disk Usage:
+
+  Metric      Value  
+ ─────────────────── 
+  Total    238.5 GB 
+  Used     127.3 GB 
+  Free     111.2 GB 
+  Usage     53.4%   
+```
+
 ## Safety
 
 This tool is **read-only by default**:
 - All analysis commands only read data
 - Suggestions provide **commands to run manually**
 - No files are automatically deleted
+
+```
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                           ⚠️  SAFETY NOTE                                     ║
+║  All suggestions show commands for you to run MANUALLY.                     ║
+║  No files are deleted automatically.                                          ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+```
 
 ## Installation
 
@@ -152,3 +249,12 @@ python -m pytest tests/test_suggestions.py -v
 ## License
 
 MIT
+
+---
+
+```
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║  Thanks for using Storage Analyzer!                                          ║
+║  Star us on GitHub: https://github.com/activatethefud/storage_analyzer       ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+```
