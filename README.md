@@ -119,6 +119,25 @@ This tool is **read-only by default**:
 
 ## Installation
 
+### Option 1: Download Pre-built Binary (Recommended)
+Download the latest release from GitHub:
+```bash
+# Download the binary
+curl -L -o storage-analyzer https://github.com/activatethefud/storage_analyzer/releases/latest/download/storage-analyzer
+
+# Make it executable
+chmod +x storage-analyzer
+
+# Move to your PATH
+sudo mv storage-analyzer /usr/local/bin/
+```
+
+### Option 2: Install from PyPI (coming soon)
+```bash
+pip install storage-analyzer
+```
+
+### Option 3: Install from Source
 ```bash
 pip install -e .
 ```
