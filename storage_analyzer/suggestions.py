@@ -176,6 +176,118 @@ def get_system_cleanable_items() -> list[CleanableItem]:
     return items
 
 
+def get_system_cleanup_suggestions() -> list[CleanableItem]:
+    """
+    Find additional system cleanup suggestions.
+    
+    Includes journal cleanup, old kernels, crash reports, etc.
+    """
+    items = []
+    
+    journal_dir = Path("/var/log/journal")
+    if journal_dir.exists() and os.access(journal_dir, os.R_OK):
+        try:
+            size = get_directory_size(str(journal_dir))
+            if size > 50 * 1024 * 1024:
+                items.append(CleanableItem(
+                    name="systemd journal logs",
+                    path="/var/log/journal",
+                    size=size,
+                    command="sudo journalctl --vacuum-size=100M",
+                    description=f"Clean systemd journal logs (keep 100MB)"
+                ))
+        except (PermissionError, OSError):
+            pass
+    
+    try:
+        result = subprocess.run(
+            ["dpkg", "-l", "linux-image-*"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            lines = [l for l in result.stdout.split("\n") if l.startswith("ii") and "linux-image" in l]
+            if len(lines) > 1:
+                items.append(CleanableItem(
+                    name="Old kernel images",
+                    path="/boot",
+                    size=0,
+                    command="sudo apt-get autoremove --purge",
+                    description=f"Remove {len(lines)-1} old kernel versions"
+                ))
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+    
+    crash_dir = Path("/var/crash")
+    if crash_dir.exists() and os.access(crash_dir, os.R_OK):
+        try:
+            crash_files = list(crash_dir.glob("*.crash"))
+            if crash_files:
+                size = sum(f.stat().st_size for f in crash_files)
+                if size > 1024 * 1024:
+                    items.append(CleanableItem(
+                        name="Crash reports",
+                        path="/var/crash",
+                        size=size,
+                        command="sudo rm /var/crash/*.crash",
+                        description=f"Remove {len(crash_files)} crash report files"
+                    ))
+        except (PermissionError, OSError):
+            pass
+    
+    old_logs_dir = Path("/var/log")
+    if old_logs_dir.exists() and os.access(old_logs_dir, os.R_OK):
+        try:
+            total_old_logs = 0
+            old_log_files = []
+            for entry in old_logs_dir.glob("*.[0-9]"):
+                if entry.is_file() and entry.stat().st_size > 1024 * 1024:
+                    total_old_logs += entry.stat().st_size
+                    old_log_files.append(entry.name)
+            
+            if total_old_logs > 10 * 1024 * 1024:
+                items.append(CleanableItem(
+                    name="Old rotated log files",
+                    path="/var/log",
+                    size=total_old_logs,
+                    command="sudo find /var/log -name '*.gz' -o -name '*.[0-9]' | xargs sudo rm",
+                    description=f"Remove {len(old_log_files)} old rotated log files"
+                ))
+        except (PermissionError, OSError):
+            pass
+    
+    try:
+        result = subprocess.run(
+            ["systemd-analyze", "disk-usage"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            for line in result.stdout.split("\n"):
+                if "disk usage" in line.lower():
+                    parts = line.split()
+                    for i, part in enumerate(parts):
+                        if "GB" in part and i > 0:
+                            try:
+                                size_gb = float(part.replace("GB", ""))
+                                if size_gb > 0.5:
+                                    items.append(CleanableItem(
+                                        name="systemd journal (analyze)",
+                                        path="/var/log/journal",
+                                        size=int(size_gb * 1024 * 1024 * 1024),
+                                        command="sudo journalctl --vacuum-time=7d",
+                                        description=f"Systemd journal uses {size_gb:.1f}GB"
+                                    ))
+                            except ValueError:
+                                pass
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+    
+    return items
+
+
 def get_package_cleanup_suggestions() -> list[CleanableItem]:
     """
     Find cleanup suggestions from package managers.
@@ -306,6 +418,7 @@ def get_all_suggestions(device: Optional[str] = None) -> list[CleanableItem]:
     items.extend(get_user_cleanable_items())
     items.extend(get_docker_items())
     items.extend(get_package_cleanup_suggestions())
+    items.extend(get_system_cleanup_suggestions())
     
     if os.geteuid() == 0:
         items.extend(get_system_cleanable_items())
