@@ -80,3 +80,48 @@ class TestCLI:
         
         assert result.exit_code == 0
         assert "Total" in result.output
+    
+    def test_drives_command(self):
+        """Test drives command."""
+        result = self.runner.invoke(cli, ['drives'])
+        
+        assert result.exit_code == 0
+        assert "Block Devices" in result.output or "/dev/" in result.output
+    
+    def test_suggest_with_device_valid(self):
+        """Test suggest command with valid device."""
+        result = self.runner.invoke(cli, ['suggest', '--device', '/dev/sda2'])
+        
+        assert result.exit_code == 0
+        assert "mounted at" in result.output or "Analyzing" in result.output
+    
+    def test_suggest_with_device_not_found(self):
+        """Test suggest command with non-existent device."""
+        result = self.runner.invoke(cli, ['suggest', '--device', '/dev/sda999'])
+        
+        assert "not found" in result.output
+    
+    def test_suggest_with_device_invalid_format(self):
+        """Test suggest command with invalid device format."""
+        result = self.runner.invoke(cli, ['suggest', '--device', 'invalid'])
+        
+        assert "Invalid device format" in result.output
+    
+    def test_suggest_with_device_not_mounted(self):
+        """Test suggest command with unmounted device."""
+        result = self.runner.invoke(cli, ['suggest', '--device', '/dev/sda'])
+        
+        assert "not mounted" in result.output
+    
+    def test_clean_with_device_valid(self):
+        """Test clean command with valid device."""
+        result = self.runner.invoke(cli, ['clean', '--device', '/dev/sda2'])
+        
+        assert result.exit_code == 0
+        assert "mounted at" in result.output or "Looking" in result.output
+    
+    def test_clean_with_device_not_found(self):
+        """Test clean command with non-existent device."""
+        result = self.runner.invoke(cli, ['clean', '--device', '/dev/sda999'])
+        
+        assert "not found" in result.output
