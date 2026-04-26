@@ -98,10 +98,15 @@ def large_files(paths, top):
     """Find largest files in one or more directories.
     
     Scans the specified directories and lists the largest files by size.
+    This helps identify which files are consuming the most disk space.
+    
+    The scan is recursive and will find files in all subdirectories.
+    Use --top to control how many files to show.
     
     Examples:
         storage-analyzer large-files /home
-        storage-analyzer large-files /home /var --top 20"""
+        storage-analyzer large-files /home /var --top 20
+        storage-analyzer large-files /home --top 50"""
     for path in paths:
         console.print(f"\n[bold cyan]Finding largest files in:[/bold cyan] {path}\n")
         
@@ -141,11 +146,18 @@ def large_files(paths, top):
 def large_dirs(paths, top):
     """Find largest directories in one or more paths.
     
-    Shows which directories use the most disk space.
+    Shows which directories use the most disk space. Results are sorted
+    by total size in descending order.
+    
+    The scan is recursive - it calculates the total size of each directory
+    including all subdirectories.
+    
+    Use --top to control how many directories to show.
     
     Examples:
         storage-analyzer large-dirs /home
-        storage-analyzer large-dirs /home /var --top 5"""
+        storage-analyzer large-dirs /home /var --top 5
+        storage-analyzer large-dirs /home --top 20"""
     for path in paths:
         console.print(f"\n[bold cyan]Finding largest directories in:[/bold cyan] {path}\n")
         
@@ -184,9 +196,23 @@ def large_dirs(paths, top):
 def clean(device):
     """List cleanable items (cache, logs, trash).
     
-    Shows items that can be cleaned to free up disk space.
-    Use --device to filter to a specific partition.
+    Scans and lists items that can be cleaned to free up disk space.
+    This is a read-only operation that shows what can be removed without
+    actually deleting anything.
+    
+    Detected items include:
+      - User cache files (pip, npm, yarn, thumbnails)
+      - Browser caches (Firefox, Chrome)
+      - Trash folder
+      - Package manager caches (APT)
+      - Docker unused images
+      - Systemd journal logs
+      - Old kernel images
+      - Crash reports
+    
+    Use --device to filter results to a specific partition.
     Use 'storage-analyzer drives' to see available devices.
+    Use 'storage-analyzer suggest' for actionable cleanup commands.
     
     Examples:
         storage-analyzer clean
@@ -231,9 +257,25 @@ def clean(device):
 def suggest(device):
     """Get actionable cleanup suggestions.
     
-    Shows cleanup recommendations with commands to run manually.
+    Scans for cleanup recommendations and displays commands that can be
+    run manually to free up disk space. All suggestions are read-only -
+    no files are deleted automatically.
+    
+    Each suggestion shows:
+      - Item name and size
+      - Path to the item
+      - Command to run for cleanup
+    
+    Categories include:
+      - User caches (pip, npm, yarn, thumbnails)
+      - Browser caches (Firefox, Chrome)
+      - Package manager (APT, Flatpak, Docker)
+      - System logs (journal, old logs)
+      - Old kernels and crash reports
+    
     Use --device to get suggestions for a specific partition.
     Use 'storage-analyzer drives' to see available devices.
+    Use 'storage-analyzer clean' for a simple list without commands.
     
     Examples:
         storage-analyzer suggest
@@ -280,10 +322,18 @@ def suggest(device):
 def disk():
     """Show disk usage for the filesystem.
     
-    Displays total, used, and free space for the filesystem containing home directory.
+    Displays total, used, and free space for the filesystem containing the
+    user's home directory. Shows the overall disk capacity and how much is
+    currently used vs available.
     
     Example:
-        storage-analyzer disk"""
+        storage-analyzer disk
+    
+    Output includes:
+      - Total disk capacity
+      - Currently used space
+      - Available free space
+      - Usage percentage"""
     console.print("\n[bold cyan]Disk Usage:[/bold cyan]\n")
     
     path = get_home_directory()
@@ -305,12 +355,20 @@ def disk():
 def drives():
     """List all block devices (disks and partitions).
     
-    Shows all available drives and their mount points.
-    Use this to find the device path for --device option in other commands.
+    Shows all available drives and their mount points. This is useful to
+    identify which device corresponds to which mount point (e.g., /dev/sda2
+    is mounted at / for root filesystem).
+    
+    Use the device path with --device option in 'clean' or 'suggest' commands
+    to get cleanup suggestions for a specific partition.
     
     Example:
         storage-analyzer drives
-    """
+    
+    Output shows:
+      - Disk devices (e.g., /dev/sda, /dev/sdb)
+      - Partition sizes
+      - Mount points (or "not mounted")"""
     console.print("\n[bold cyan]Available Block Devices:[/bold cyan]\n")
     
     with create_progress() as progress:
