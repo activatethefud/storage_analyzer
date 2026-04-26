@@ -32,7 +32,7 @@ def create_progress():
 
 
 @cli.command()
-@click.argument('paths', nargs=-1, default=['.'])
+@click.argument('paths', nargs=-1)
 @click.option('--depth', default=2, help='Directory depth to scan (default: 2)')
 def scan(paths, depth):
     """Scan one or more directories and show size breakdown.
@@ -43,6 +43,7 @@ def scan(paths, depth):
         storage-analyzer scan /home
         storage-analyzer scan /home /var /tmp --depth 3
         storage-analyzer scan . --depth 1"""
+    paths = paths or ('.',)
     for path in paths:
         console.print(f"\n[bold cyan]Scanning:[/bold cyan] {path}")
         console.print(f"[dim]Depth: {depth}[/dim]\n")
@@ -92,7 +93,7 @@ def scan(paths, depth):
 
 
 @cli.command()
-@click.argument('paths', nargs=-1, default=['.'])
+@click.argument('paths', nargs=-1)
 @click.option('--top', default=10, help='Number of files to show (default: 10)')
 def large_files(paths, top):
     """Find largest files in one or more directories.
@@ -107,6 +108,7 @@ def large_files(paths, top):
         storage-analyzer large-files /home
         storage-analyzer large-files /home /var --top 20
         storage-analyzer large-files /home --top 50"""
+    paths = paths or ('.',)
     for path in paths:
         console.print(f"\n[bold cyan]Finding largest files in:[/bold cyan] {path}\n")
         
@@ -141,7 +143,7 @@ def large_files(paths, top):
 
 
 @cli.command()
-@click.argument('paths', nargs=-1, default=['.'])
+@click.argument('paths', nargs=-1)
 @click.option('--top', default=10, help='Number of directories to show (default: 10)')
 def large_dirs(paths, top):
     """Find largest directories in one or more paths.
@@ -158,6 +160,7 @@ def large_dirs(paths, top):
         storage-analyzer large-dirs /home
         storage-analyzer large-dirs /home /var --top 5
         storage-analyzer large-dirs /home --top 20"""
+    paths = paths or ('.',)
     for path in paths:
         console.print(f"\n[bold cyan]Finding largest directories in:[/bold cyan] {path}\n")
         
