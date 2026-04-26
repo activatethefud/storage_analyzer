@@ -33,9 +33,16 @@ def create_progress():
 
 @cli.command()
 @click.argument('paths', nargs=-1, default=['.'])
-@click.option('--depth', default=2, help='Directory depth to scan')
+@click.option('--depth', default=2, help='Directory depth to scan (default: 2)')
 def scan(paths, depth):
-    """Scan one or more directories and show size breakdown."""
+    """Scan one or more directories and show size breakdown.
+    
+    Shows total size, file count, directory count, and top directories by size.
+    
+    Examples:
+        storage-analyzer scan /home
+        storage-analyzer scan /home /var /tmp --depth 3
+        storage-analyzer scan . --depth 1"""
     for path in paths:
         console.print(f"\n[bold cyan]Scanning:[/bold cyan] {path}")
         console.print(f"[dim]Depth: {depth}[/dim]\n")
@@ -86,9 +93,15 @@ def scan(paths, depth):
 
 @cli.command()
 @click.argument('paths', nargs=-1, default=['.'])
-@click.option('--top', default=10, help='Number of files to show')
+@click.option('--top', default=10, help='Number of files to show (default: 10)')
 def large_files(paths, top):
-    """Find largest files in one or more directories."""
+    """Find largest files in one or more directories.
+    
+    Scans the specified directories and lists the largest files by size.
+    
+    Examples:
+        storage-analyzer large-files /home
+        storage-analyzer large-files /home /var --top 20"""
     for path in paths:
         console.print(f"\n[bold cyan]Finding largest files in:[/bold cyan] {path}\n")
         
@@ -124,9 +137,15 @@ def large_files(paths, top):
 
 @cli.command()
 @click.argument('paths', nargs=-1, default=['.'])
-@click.option('--top', default=10, help='Number of directories to show')
+@click.option('--top', default=10, help='Number of directories to show (default: 10)')
 def large_dirs(paths, top):
-    """Find largest directories in one or more paths."""
+    """Find largest directories in one or more paths.
+    
+    Shows which directories use the most disk space.
+    
+    Examples:
+        storage-analyzer large-dirs /home
+        storage-analyzer large-dirs /home /var --top 5"""
     for path in paths:
         console.print(f"\n[bold cyan]Finding largest directories in:[/bold cyan] {path}\n")
         
@@ -165,9 +184,14 @@ def large_dirs(paths, top):
 def clean(device):
     """List cleanable items (cache, logs, trash).
     
-    Use --device to filter suggestions to a specific partition.
+    Shows items that can be cleaned to free up disk space.
+    Use --device to filter to a specific partition.
     Use 'storage-analyzer drives' to see available devices.
-    """
+    
+    Examples:
+        storage-analyzer clean
+        storage-analyzer clean --device /dev/sda2
+        storage-analyzer clean --device /dev/sda4"""
     if device:
         is_valid, error = validate_device(device)
         if not is_valid:
@@ -207,9 +231,14 @@ def clean(device):
 def suggest(device):
     """Get actionable cleanup suggestions.
     
+    Shows cleanup recommendations with commands to run manually.
     Use --device to get suggestions for a specific partition.
     Use 'storage-analyzer drives' to see available devices.
-    """
+    
+    Examples:
+        storage-analyzer suggest
+        storage-analyzer suggest --device /dev/sda2
+        storage-analyzer suggest --device /dev/sda4"""
     if device:
         is_valid, error = validate_device(device)
         if not is_valid:
@@ -249,7 +278,12 @@ def suggest(device):
 
 @cli.command()
 def disk():
-    """Show disk usage for the filesystem."""
+    """Show disk usage for the filesystem.
+    
+    Displays total, used, and free space for the filesystem containing home directory.
+    
+    Example:
+        storage-analyzer disk"""
     console.print("\n[bold cyan]Disk Usage:[/bold cyan]\n")
     
     path = get_home_directory()
@@ -272,7 +306,10 @@ def drives():
     """List all block devices (disks and partitions).
     
     Shows all available drives and their mount points.
-    Use this to find the device path for --device option.
+    Use this to find the device path for --device option in other commands.
+    
+    Example:
+        storage-analyzer drives
     """
     console.print("\n[bold cyan]Available Block Devices:[/bold cyan]\n")
     

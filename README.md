@@ -11,6 +11,7 @@ A CLI tool to analyze storage space on Linux and get actionable cleanup suggesti
 - **Get suggestions** - Actionable recommendations with copy-paste commands
 - **Device filtering** - Get suggestions for specific partitions/drives
 - **Package manager cleanup** - Suggestions for apt, flatpak, snap, etc.
+- **System cleanup** - Journal logs, old kernels, crash reports, etc.
 
 ## Safety
 
@@ -23,6 +24,11 @@ This tool is **read-only by default**:
 
 ```bash
 pip install -e .
+```
+
+Or run directly:
+```bash
+python -m storage_analyzer <command>
 ```
 
 ## Usage
@@ -102,8 +108,34 @@ storage-analyzer disk
 - Flatpak unused runtimes
 - Docker unused images
 
-### System Logs
-- Compressed logs in /var/log
+### System Cleanup (requires root/sudo)
+- systemd journal logs (`journalctl --vacuum-size`)
+- Old kernel images (`apt-get autoremove --purge`)
+- Crash reports (/var/crash)
+- Old rotated log files
+
+## Examples
+
+### Clean up root partition
+```bash
+# Find root device
+storage-analyzer drives
+
+# Get cleanup suggestions for root
+storage-analyzer suggest --device /dev/sda2
+```
+
+### Clean up home partition
+```bash
+storage-analyzer suggest --device /dev/sda4
+```
+
+### Find what's using space
+```bash
+storage-analyzer scan /home --depth 2
+storage-analyzer large-files /home --top 20
+storage-analyzer large-dirs /home --top 10
+```
 
 ## Development
 
